@@ -176,7 +176,7 @@ impl Clipboard {
 	pub fn get_formats(
 		&mut self,
 		formats: &[ClipboardFormat],
-	) -> Result<Vec<ClipboardData>, Error> {
+	) -> Result<Vec<Result<ClipboardData, Error>>, Error> {
 		self.get().formats(formats)
 	}
 
@@ -246,7 +246,10 @@ impl Get<'_> {
 		self.platform.special(format_name)
 	}
 
-	pub fn formats(self, formats: &[ClipboardFormat]) -> Result<Vec<ClipboardData>, Error> {
+	pub fn formats(
+		self,
+		formats: &[ClipboardFormat],
+	) -> Result<Vec<Result<ClipboardData, Error>>, Error> {
 		self.platform.formats(formats)
 	}
 }

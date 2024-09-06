@@ -355,7 +355,7 @@ impl Clipboard {
 		&mut self,
 		formats: &[ClipboardFormat],
 		selection: LinuxClipboardKind,
-	) -> Result<Vec<ClipboardData>, Error> {
+	) -> Vec<Result<ClipboardData, Error>> {
 		let mut results = Vec::new();
 		let mut err = None;
 		let mut err_count = 0;
