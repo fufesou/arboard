@@ -1102,7 +1102,7 @@ impl Clipboard {
 					Ok(text) => results.push(ClipboardData::Text(text)),
 					Err(Error::ContentNotAvailable) => results.push(ClipboardData::None),
 					Err(e) => {
-						log::debug!("Error while getting text: {:?}", e);
+						log::debug!("Error while getting text: {}", e);
 						results.push(ClipboardData::None);
 						err = Some(e);
 						err_count += 1;
@@ -1112,7 +1112,7 @@ impl Clipboard {
 					Ok(rtf) => results.push(ClipboardData::Rtf(rtf)),
 					Err(Error::ContentNotAvailable) => results.push(ClipboardData::None),
 					Err(e) => {
-						log::debug!("Error while getting rtf: {:?}", e);
+						log::debug!("Error while getting rtf: {}", e);
 						results.push(ClipboardData::None);
 						err = Some(e);
 						err_count += 1;
@@ -1122,7 +1122,7 @@ impl Clipboard {
 					Ok(html) => results.push(ClipboardData::Html(html)),
 					Err(Error::ContentNotAvailable) => results.push(ClipboardData::None),
 					Err(e) => {
-						log::debug!("Error while getting html: {:?}", e);
+						log::debug!("Error while getting html: {}", e);
 						results.push(ClipboardData::None);
 						err = Some(e);
 						err_count += 1;
@@ -1132,7 +1132,7 @@ impl Clipboard {
 					Ok(image) => results.push(ClipboardData::Image(image)),
 					Err(Error::ContentNotAvailable) => results.push(ClipboardData::None),
 					Err(e) => {
-						log::debug!("Error while getting image: {:?}", e);
+						log::debug!("Error while getting image: {}", e);
 						results.push(ClipboardData::None);
 						err = Some(e);
 						err_count += 1;
@@ -1142,7 +1142,7 @@ impl Clipboard {
 					Ok(image) => results.push(ClipboardData::Image(image)),
 					Err(Error::ContentNotAvailable) => results.push(ClipboardData::None),
 					Err(e) => {
-						log::debug!("Error while getting image: {:?}", e);
+						log::debug!("Error while getting image: {}", e);
 						results.push(ClipboardData::None);
 						err = Some(e);
 						err_count += 1;
@@ -1152,7 +1152,7 @@ impl Clipboard {
 					Ok(image) => results.push(ClipboardData::Image(image)),
 					Err(Error::ContentNotAvailable) => results.push(ClipboardData::None),
 					Err(e) => {
-						log::debug!("Error while getting image: {:?}", e);
+						log::debug!("Error while getting image: {}", e);
 						results.push(ClipboardData::None);
 						err = Some(e);
 						err_count += 1;
@@ -1165,7 +1165,7 @@ impl Clipboard {
 						}
 						Err(Error::ContentNotAvailable) => results.push(ClipboardData::None),
 						Err(e) => {
-							log::debug!("Error while getting special: {:?}", e);
+							log::debug!("Error while getting special: {}", e);
 							results.push(ClipboardData::None);
 							err = Some(e);
 							err_count += 1;

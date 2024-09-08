@@ -741,7 +741,7 @@ impl<'clipboard> Get<'clipboard> {
 					Ok(html) => results.push(ClipboardData::Html(html)),
 					Err(Error::ContentNotAvailable) => results.push(ClipboardData::None),
 					Err(e) => {
-						log::debug!("Error reading HTML from clipboard, {:?}", e);
+						log::debug!("Error reading HTML from clipboard, {}", e);
 						cur_err = Some(e);
 					}
 				},
@@ -749,7 +749,7 @@ impl<'clipboard> Get<'clipboard> {
 					Ok(image) => results.push(ClipboardData::Image(image)),
 					Err(Error::ContentNotAvailable) => results.push(ClipboardData::None),
 					Err(e) => {
-						log::debug!("Error reading image from clipboard, {:?}", e);
+						log::debug!("Error reading image from clipboard, {}", e);
 						cur_err = Some(e);
 					}
 				},
@@ -757,7 +757,7 @@ impl<'clipboard> Get<'clipboard> {
 					Ok(image) => results.push(ClipboardData::Image(image)),
 					Err(Error::ContentNotAvailable) => results.push(ClipboardData::None),
 					Err(e) => {
-						log::debug!("Error reading PNG from clipboard, {:?}", e);
+						log::debug!("Error reading PNG from clipboard, {}", e);
 						cur_err = Some(e);
 					}
 				},
@@ -765,7 +765,7 @@ impl<'clipboard> Get<'clipboard> {
 					Ok(image) => results.push(ClipboardData::Image(image)),
 					Err(Error::ContentNotAvailable) => results.push(ClipboardData::None),
 					Err(e) => {
-						log::debug!("Error reading SVG from clipboard, {:?}", e);
+						log::debug!("Error reading SVG from clipboard, {}", e);
 						cur_err = Some(e);
 					}
 				},
@@ -775,7 +775,7 @@ impl<'clipboard> Get<'clipboard> {
 					}
 					Err(Error::ContentNotAvailable) => results.push(ClipboardData::None),
 					Err(e) => {
-						log::debug!("Error reading special format from clipboard, {:?}", e);
+						log::debug!("Error reading special format from clipboard, {}", e);
 						cur_err = Some(e);
 					}
 				},

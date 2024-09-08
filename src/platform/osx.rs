@@ -340,7 +340,7 @@ impl<'clipboard> Get<'clipboard> {
 							}
 							Err(Error::ContentNotAvailable) => {}
 							Err(e) => {
-								log::debug!("Error reading image: {:?}", e);
+								log::debug!("Error reading image: {}", e);
 								break;
 							}
 						},
@@ -351,7 +351,7 @@ impl<'clipboard> Get<'clipboard> {
 							}
 							Err(Error::ContentNotAvailable) => {}
 							Err(e) => {
-								log::debug!("Error reading image: {:?}", e);
+								log::debug!("Error reading image: {}", e);
 								break;
 							}
 						},
@@ -362,7 +362,7 @@ impl<'clipboard> Get<'clipboard> {
 							}
 							Err(Error::ContentNotAvailable) => {}
 							Err(e) => {
-								log::debug!("Error reading image: {:?}", e);
+								log::debug!("Error reading image: {}", e);
 								break;
 							}
 						},
