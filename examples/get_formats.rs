@@ -17,8 +17,18 @@ fn main() {
 		#[cfg(any(target_os = "linux", target_os = "macos"))]
 		ClipboardFormat::FileUrl,
 		ClipboardFormat::Special(FORMAT_SPECIAL),
+		ClipboardFormat::Special("com.teamviewer.TVClipboard"),
 	];
 	for d in ctx.get_formats(&formats).unwrap() {
-		println!("data: {:?}", d);
+		println!("data: {:?}", &d);
+		match &d {
+			arboard::ClipboardData::Special((format, data)) => {
+				println!("special format: {}", format);
+				// convert data to string
+				let data = std::str::from_utf8(data).unwrap();
+				println!("special data: {:?}", data);
+			}
+			_ => {}
+		}
 	}
 }

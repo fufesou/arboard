@@ -13,20 +13,28 @@ use crate::{
 	ClipboardData, ClipboardFormat,
 };
 use objc2::{
-	class, msg_send, msg_send_id,
-	rc::{autoreleasepool, Id},
-	runtime::ProtocolObject,
-	ClassType,
+	class, declare_class, msg_send, msg_send_id, rc::{autoreleasepool, Id},  ClassType,DeclaredClass,
+	runtime::{AnyObject, Class, NSObject, NSObjectProtocol, ProtocolObject},mutability
 };
 use objc2_app_kit::{
-	NSPasteboard, NSPasteboardType, NSPasteboardTypeFileURL, NSPasteboardTypeHTML,
-	NSPasteboardTypePNG, NSPasteboardTypeRTF, NSPasteboardTypeString, NSPasteboardWriting,
+	NSPasteboard, NSPasteboardItem, NSPasteboardItemDataProvider, NSPasteboardType, NSPasteboardTypeFileURL, NSPasteboardTypeHTML, NSPasteboardTypePNG, NSPasteboardTypeRTF, NSPasteboardTypeString, NSPasteboardWriting
 };
 use objc2_foundation::{NSArray, NSData, NSString, NSURL};
 use std::{
 	borrow::Cow,
 	os::raw::c_void,
 	panic::{RefUnwindSafe, UnwindSafe},
+	rc::Rc,
+	vec,
+};
+use objc2_app_kit::{
+	NSFilePromiseProvider, NSFilePromiseProviderDelegate, 
+	 NSPasteboardWritingOptions,
+};
+
+use super::{
+	api_model::{DataProvider, DataProviderValueId, DataRepresentation, VirtualFileStorage},
+	data_provider::PlatformDataProvider,
 };
 
 const NS_PASTEBOARD_TYPE_SVG: &str = "public.svg-image";
@@ -414,6 +422,50 @@ impl<'clipboard> Get<'clipboard> {
 	}
 }
 
+struct Ivars {
+	item_state: Rc<()>,
+}
+
+declare_class!(
+	struct SNEPasteboardWriter2;
+
+	unsafe impl ClassType for SNEPasteboardWriter2 {
+		type Super = NSObject;
+		type Mutability = mutability::InteriorMutable;
+		const NAME: &'static str = "SNEPasteboardWriter2";
+	}
+
+	impl DeclaredClass for SNEPasteboardWriter2 {
+		type Ivars = Ivars;
+	}
+
+	unsafe impl NSObjectProtocol for SNEPasteboardWriter2 {}
+
+	unsafe impl NSPasteboardItemDataProvider for SNEPasteboardWriter2 {
+		#[method(pasteboard:item:provideDataForType:)]
+		#[allow(non_snake_case)]
+		unsafe fn pasteboard_item_provideDataForType(
+			&self,
+            pasteboard: Option<&NSPasteboard>,
+            item: &NSPasteboardItem,
+            r#type: &NSPasteboardType,
+		) {
+            println!("REMOVE ME ====================== pasteboard_item_provideDataForType");
+			pasteboard.map(|p| {
+				p.setString_forType(&NSString::from_str("12345"), r#type);
+				// p.readFileContentsType_toFile(Some(r#type), &NSString::from_str("/tmp/test.txt"));
+			});
+		}
+
+        #[method(pasteboardFinishedWithDataProvider:)]
+        unsafe fn pasteboardFinishedWithDataProvider(&self, pasteboard: &NSPasteboard) {
+			println!("REMOVE ME ====================== pasteboardFinishedWithDataProvider");
+		}
+	}
+
+	unsafe impl SNEPasteboardWriter2 {}
+);
+
 pub(crate) struct Set<'clipboard> {
 	clipboard: &'clipboard mut Clipboard,
 }
@@ -692,8 +744,54 @@ impl<'clipboard> Set<'clipboard> {
 								&NSString::from_str(&url),
 								NSPasteboardTypeFileURL,
 							);
+							let writer = SNEPasteboardWriter2::alloc();
+							let writer = writer.set_ivars(Ivars { item_state: Rc::new(()) });
+							let writer: Id<SNEPasteboardWriter2> = unsafe { msg_send_id![super(writer), init] };
+							let types = NSArray::from_vec(vec![NSString::from_str(&NSPasteboardTypeFileURL.to_string())]);
+							item.setDataProvider_forTypes(&ProtocolObject::from_id(writer), &types);
 							write_objects.push(ProtocolObject::from_id(item));
 						}
+
+						// let provider = DataProvider {
+						// 	// representations: vec![DataRepresentation::Lazy {
+						// 	// 	id: DataProviderValueId(0),
+						// 	// 	// format: "public.file-url".to_string(),
+						// 	// 	format: NSPasteboardTypeFileURL.to_string(),
+						// 	// }],
+						// 	representations: vec![DataRepresentation::VirtualFile {
+						// 		id: DataProviderValueId(0),
+						// 		// format: "public.file-url".to_string(),
+						// 		format: NSPasteboardTypeFileURL.to_string(),
+						// 		storage_suggestion: Some(VirtualFileStorage::TemporaryFile),
+						// 	}],
+						// 	suggested_name: Some("/tmp/test3.txt".to_string()),
+						// };
+						// let provider1 = DataProvider {
+						// 	representations: vec![DataRepresentation::Lazy {
+						// 		id: DataProviderValueId(0),
+						// 		// format: "public.file-url".to_string(),
+						// 		format: NSPasteboardTypeFileURL.to_string(),
+						// 	}],
+						// 	suggested_name: Some("/tmp/test3.txt".to_string()),
+						// };
+						// let provider2 = DataProvider {
+						// 	representations: vec![DataRepresentation::Simple {
+						// 		data: irondash_message_channel::Value::String(
+						// 			"/tmp/test3.txt".to_string(),
+						// 		),
+						// 		// format: NSPasteboardTypeString.to_string(),
+						// 		// format: "public.file-url".to_string(),
+						// 		format: NSPasteboardTypeFileURL.to_string(),
+						// 	}],
+						// 	suggested_name: Some("/tmp/test3.txt".to_string()),
+						// };
+						// let providers = vec![
+						// 	// Rc::new(PlatformDataProvider::new(provider)),
+						// 	// Rc::new(PlatformDataProvider::new(provider1)),
+						// 	Rc::new(PlatformDataProvider::new(provider2)),
+						// ];
+						// PlatformDataProvider::write_to_clipboard2(self.clipboard.pasteboard.clone(), providers);
+
 					}
 					ClipboardData::Special((format_name, data)) => {
 						let nsdata: *const objc2_foundation::NSData = msg_send![class!(NSData), dataWithBytes:data.as_ptr() as *const c_void length:data.len() as u64];

@@ -15,3 +15,19 @@ pub use windows::*;
 mod osx;
 #[cfg(target_os = "macos")]
 pub(crate) use osx::*;
+#[cfg(target_os = "macos")]
+pub(crate) mod data_provider;
+
+#[cfg(target_os = "macos")]
+pub(crate) mod api_model;
+
+#[cfg(target_os = "macos")]
+pub(crate) mod log;
+
+#[cfg(target_os = "macos")]
+pub(crate) mod value_promise;
+
+#[cfg(target_os = "macos")]
+pub(crate) mod data_provider_manager;
+#[cfg(target_os = "macos")]
+pub(crate) mod error;
