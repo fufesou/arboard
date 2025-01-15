@@ -2,7 +2,7 @@ use arboard::{Clipboard, ClipboardData, ClipboardFormat};
 
 fn main() {
 	env_logger::init();
-{
+
 	let mut clipboard = Clipboard::new().unwrap();
 	println!(
 		"Clipboard urls was: {:?}",
@@ -21,7 +21,8 @@ fn main() {
 	// 		ClipboardFormat::Text,
 	// 		ClipboardFormat::FileUrl]).unwrap()
 	// );
-}
+
+	// clipboard.set_text("Hello, clipboard!").unwrap();
 
 	loop {
 		std::thread::sleep(std::time::Duration::from_secs(1));
