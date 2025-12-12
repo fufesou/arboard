@@ -282,6 +282,69 @@ mod image_data {
 		}
 	}
 
+	pub(super) fn read_cf_dib(dib: &[u8]) -> Result<ImageData<'static>, Error> {
+		use std::ffi::c_void;
+		use windows_sys::Win32::Graphics::Gdi::{BITMAPINFO, BITMAPINFOHEADER};
+		unsafe {
+			if dib.len() < std::mem::size_of::<BITMAPINFOHEADER>() {
+				return Err(Error::unknown("DIB data shorter than BITMAPINFOHEADER"));
+			}
+			let header = &*(dib.as_ptr() as *const BITMAPINFOHEADER);
+			if header.biBitCount != 32 || header.biCompression != BI_RGB as u32 {
+				return Err(Error::ContentNotAvailable);
+			}
+			let header_size = header.biSize as usize;
+			let image_bytes = dib.as_ptr().add(header_size) as *const c_void;
+			let hdc = get_screen_device_context()?;
+			let hbitmap = CreateDIBitmap(
+				hdc,
+				header as *const _,
+				CBM_INIT as u32,
+				image_bytes,
+				header as *const BITMAPINFO as *const _,
+				DIB_RGB_COLORS,
+			);
+			if hbitmap == 0 {
+				return Err(Error::unknown("CreateDIBitmap returned null for CF_DIB"));
+			}
+			let w = header.biWidth;
+			let h = header.biHeight.abs();
+			let result_size = w as usize * h as usize * 4;
+			let mut result_bytes = Vec::<u8>::with_capacity(result_size);
+			let mut output_header = BITMAPINFO {
+				bmiColors: [RGBQUAD { rgbRed: 0, rgbGreen: 0, rgbBlue: 0, rgbReserved: 0 }],
+				bmiHeader: BITMAPINFOHEADER {
+					biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+					biWidth: w,
+					biHeight: -h,
+					biBitCount: 32,
+					biPlanes: 1,
+					biCompression: BI_RGB as u32,
+					biSizeImage: 0,
+					biXPelsPerMeter: 0,
+					biYPelsPerMeter: 0,
+					biClrUsed: 0,
+					biClrImportant: 0,
+				},
+			};
+			let lines = convert_bitmap_to_rgb(
+				hdc,
+				hbitmap,
+				h as _,
+				result_bytes.as_mut_ptr() as _,
+				&mut output_header as _,
+			)?;
+			let read_len = lines as usize * w as usize * 4;
+			result_bytes.set_len(read_len);
+			let mut result_bytes = win_to_rgba(&mut result_bytes);
+			// Force alpha to 0xFF as BI_RGB 32bpp alpha is undefined
+			for px in result_bytes.chunks_mut(4) {
+				px[3] = 0xFF;
+			}
+			Ok(ImageData::rgba(w as _, h as _, Cow::Owned(result_bytes)))
+		}
+	}
+
 	fn get_screen_device_context() -> Result<HDC, Error> {
 		// SAFETY: Calling `GetDC` with `NULL` is safe.
 		let hdc = unsafe { GetDC(0) };
@@ -645,7 +708,10 @@ impl<'clipboard> Get<'clipboard> {
 	fn image_() -> Result<ImageData<'static>, Error> {
 		match Self::image_svg() {
 			Err(Error::ContentNotAvailable) => match Self::image_png() {
-				Err(Error::ContentNotAvailable) => Self::image_dibv5(),
+				Err(Error::ContentNotAvailable) => match Self::image_dibv5() {
+					Err(Error::ContentNotAvailable) => Self::image_dib(),
+					result => result,
+				},
 				result => result,
 			},
 			result => result,
@@ -663,8 +729,20 @@ impl<'clipboard> Get<'clipboard> {
 
 		clipboard_win::raw::get_vec(FORMAT, &mut data)
 			.map_err(|e| map_error_code("failed to read clipboard image data", e))?;
-
+		log::debug!("====================== S4/Windows: using CF_DIBV5");
 		image_data::read_cf_dibv5(&data)
+	}
+
+	fn image_dib() -> Result<ImageData<'static>, Error> {
+		const FORMAT: u32 = clipboard_win::formats::CF_DIB;
+		if !clipboard_win::is_format_avail(FORMAT) {
+			return Err(Error::ContentNotAvailable);
+		}
+		let mut data = Vec::new();
+		clipboard_win::raw::get_vec(FORMAT, &mut data)
+			.map_err(|e| map_error_code("failed to read clipboard image data (CF_DIB)", e))?;
+		log::debug!("====================== S4/Windows: using CF_DIB (will force alpha=0xFF for BI_RGB 32bpp)");
+		image_data::read_cf_dib(&data)
 	}
 
 	fn image_png() -> Result<ImageData<'static>, Error> {
@@ -747,7 +825,13 @@ impl<'clipboard> Get<'clipboard> {
 				},
 				ClipboardFormat::ImageRgba => match Self::image_dibv5() {
 					Ok(image) => results.push(ClipboardData::Image(image)),
-					Err(Error::ContentNotAvailable) => results.push(ClipboardData::None),
+					Err(Error::ContentNotAvailable) => match Self::image_dib() {
+						Ok(image) => results.push(ClipboardData::Image(image)),n						Err(Error::ContentNotAvailable) => results.push(ClipboardData::None),
+						Err(e) => {
+							log::debug!("Error reading image CF_DIB from clipboard, {:?}", e);
+							cur_err = Some(e);
+						}
+					},
 					Err(e) => {
 						log::debug!("Error reading image from clipboard, {:?}", e);
 						cur_err = Some(e);
