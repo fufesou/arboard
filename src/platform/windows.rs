@@ -289,7 +289,8 @@ mod image_data {
 			if dib.len() < std::mem::size_of::<BITMAPINFOHEADER>() {
 				return Err(Error::unknown("DIB data shorter than BITMAPINFOHEADER"));
 			}
-			let header = &*(dib.as_ptr() as *const BITMAPINFOHEADER);
+			let header_ptr = dib.as_ptr() as *const BITMAPINFOHEADER;
+			let header = &*header_ptr;
 			if header.biBitCount != 32 || header.biCompression != BI_RGB as u32 {
 				return Err(Error::ContentNotAvailable);
 			}
@@ -298,10 +299,10 @@ mod image_data {
 			let hdc = get_screen_device_context()?;
 			let hbitmap = CreateDIBitmap(
 				hdc,
-				header as *const _,
+				header_ptr,
 				CBM_INIT as u32,
 				image_bytes,
-				header as *const BITMAPINFO as *const _,
+				header_ptr as *const BITMAPINFO as *const _,
 				DIB_RGB_COLORS,
 			);
 			if hbitmap == 0 {
@@ -826,9 +827,9 @@ impl<'clipboard> Get<'clipboard> {
 				ClipboardFormat::ImageRgba => match Self::image_dibv5() {
 					Ok(image) => results.push(ClipboardData::Image(image)),
 					Err(Error::ContentNotAvailable) => match Self::image_dib() {
-						Ok(image) => results.push(ClipboardData::Image(image)),n						Err(Error::ContentNotAvailable) => results.push(ClipboardData::None),
+						Ok(image) => results.push(ClipboardData::Image(image)),
+						Err(Error::ContentNotAvailable) => results.push(ClipboardData::None),
 						Err(e) => {
-							log::debug!("Error reading image CF_DIB from clipboard, {:?}", e);
 							cur_err = Some(e);
 						}
 					},
