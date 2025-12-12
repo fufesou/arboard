@@ -15,7 +15,7 @@ use crate::{
 use objc2::{
 	class, msg_send, msg_send_id,
 	rc::{autoreleasepool, Id},
-	runtime::ProtocolObject,
+	runtime::{AnyObject, ProtocolObject},
 	ClassType,
 };
 use objc2_app_kit::{
@@ -672,10 +672,35 @@ impl<'clipboard> Set<'clipboard> {
 					// Image and FileUrl use separate items as they require different object types
 					ClipboardData::Image(data) => match data {
 						ImageData::Rgba(data) => {
+							// ====================== S1: Prefer PNG on macOS to preserve transparency reliably
+							log::debug!("====================== S1/macOS: RGBA -> PNG on pasteboard");
 							let pixels = data.bytes.clone().into();
 							let image = image_from_pixels(pixels, data.width, data.height)
 								.map_err(|e| into_unknown("failed to get rgba from pixels", e))?;
-							write_objects.push(ProtocolObject::from_id(image));
+
+							// Try to transcode NSImage -> PNG using NSBitmapImageRep without changing the item model.
+							let tiff_nsdata: *const objc2_foundation::NSData = unsafe { msg_send![&*image, TIFFRepresentation] };
+							if tiff_nsdata.is_null() {
+								log::debug!("====================== S1/macOS: TIFFRepresentation == null, fallback to NSImage object");
+								write_objects.push(ProtocolObject::from_id(image));
+							} else {
+								let rep: *mut AnyObject = unsafe { msg_send![class!(NSBitmapImageRep), imageRepWithData: tiff_nsdata] };
+								if rep.is_null() {
+									log::debug!("====================== S1/macOS: NSBitmapImageRep imageRepWithData returned null, fallback to NSImage");
+									write_objects.push(ProtocolObject::from_id(image));
+								} else {
+									// 4 == NSBitmapImageFileTypePNG
+									let png_nsdata: *const objc2_foundation::NSData = unsafe { msg_send![rep, representationUsingType: 4usize properties: core::ptr::null::<AnyObject>()] };
+									if png_nsdata.is_null() {
+										log::debug!("====================== S1/macOS: representationUsingType(PNG) == null, fallback to NSImage");
+										write_objects.push(ProtocolObject::from_id(image));
+									} else {
+										let item = objc2_app_kit::NSPasteboardItem::new();
+										unsafe { item.setData_forType(&*png_nsdata, NSPasteboardTypePNG) };
+										write_objects.push(ProtocolObject::from_id(item));
+									}
+								}
+							}
 						}
 						ImageData::Png(data) => {
 							let nsdata: *const objc2_foundation::NSData = msg_send![class!(NSData), dataWithBytes:data.as_ptr() as *const c_void length:data.len() as u64];
