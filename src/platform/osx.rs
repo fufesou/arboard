@@ -652,6 +652,14 @@ impl<'clipboard> Set<'clipboard> {
 			let mut write_objects: Vec<Id<ProtocolObject<(dyn NSPasteboardWriting + 'static)>>> =
 				vec![];
 
+			// ====================== S3: Single item for image representations (PNG + optional TIFF + optional SVG)
+			let image_item = objc2_app_kit::NSPasteboardItem::new();
+			let mut has_image_item = false;
+			let disable_tiff = std::env::var("RUSTDESK_PB_NO_TIFF").is_ok();
+			if disable_tiff {
+				log::debug!("====================== S3/macOS: RUSTDESK_PB_NO_TIFF=1 – TIFF will not be attached");
+			}
+
 			for d in data {
 				match d {
 					// Text-based formats go into the main_item as different representations
@@ -672,29 +680,56 @@ impl<'clipboard> Set<'clipboard> {
 					// Image and FileUrl use separate items as they require different object types
 					ClipboardData::Image(data) => match data {
 						ImageData::Rgba(data) => {
+							log::debug!("====================== S3/macOS: attach PNG (+TIFF?) for RGBA into a single item");
 							let pixels = data.bytes.clone().into();
 							let image = image_from_pixels(pixels, data.width, data.height)
 								.map_err(|e| into_unknown("failed to get rgba from pixels", e))?;
-							write_objects.push(ProtocolObject::from_id(image));
+							let tiff_nsdata: *const objc2_foundation::NSData = unsafe { msg_send![&*image, TIFFRepresentation] };
+							if !tiff_nsdata.is_null() {
+								// Derive PNG from TIFF via NSBitmapImageRep
+								let rep: *mut AnyObject = unsafe { msg_send![class!(NSBitmapImageRep), imageRepWithData: tiff_nsdata] };
+								if !rep.is_null() {
+									let png_nsdata: *const objc2_foundation::NSData = unsafe { msg_send![rep, representationUsingType: 4usize properties: core::ptr::null::<AnyObject>()] };
+									if !png_nsdata.is_null() {
+										unsafe { image_item.setData_forType(&*png_nsdata, NSPasteboardTypePNG) };
+										has_image_item = true;
+									}
+									if !disable_tiff {
+										unsafe { image_item.setData_forType(&*tiff_nsdata, objc2_app_kit::NSPasteboardTypeTIFF) };
+										has_image_item = true;
+									}
+								}
+							} else {
+								log::debug!("====================== S3/macOS: TIFFRepresentation null; skipping PNG/TIFF attach for RGBA");
+							}
 						}
 						ImageData::Png(data) => {
 							let nsdata: *const objc2_foundation::NSData = msg_send![class!(NSData), dataWithBytes:data.as_ptr() as *const c_void length:data.len() as u64];
 							if nsdata.is_null() {
-								return Err(Error::Unknown {
-									description: "Failed to create NSData from bytes".into(),
-								});
+								return Err(Error::Unknown { description: "Failed to create NSData from bytes".into() });
 							}
-							let item = objc2_app_kit::NSPasteboardItem::new();
-							item.setData_forType(&*(nsdata as *const NSData), NSPasteboardTypePNG);
-							write_objects.push(ProtocolObject::from_id(item));
+							log::debug!("====================== S3/macOS: attach PNG (and maybe TIFF) for PNG input");
+							unsafe { image_item.setData_forType(&*(nsdata as *const NSData), NSPasteboardTypePNG) };
+							has_image_item = true;
+							if !disable_tiff {
+								// Derive TIFF via NSBitmapImageRep from PNG data
+								let rep: *mut AnyObject = unsafe { msg_send![class!(NSBitmapImageRep), imageRepWithData: nsdata] };
+								if !rep.is_null() {
+									let tiff_nsdata: *const objc2_foundation::NSData = unsafe { msg_send![rep, representationUsingType: 0usize /* TIFF */ properties: core::ptr::null::<AnyObject>()] };
+									if !tiff_nsdata.is_null() {
+										unsafe { image_item.setData_forType(&*tiff_nsdata, objc2_app_kit::NSPasteboardTypeTIFF) };
+										has_image_item = true;
+									}
+								}
+							}
 						}
 						ImageData::Svg(data) => {
-							let item = objc2_app_kit::NSPasteboardItem::new();
-							item.setString_forType(
+							log::debug!("====================== S3/macOS: attach SVG text to the single image item");
+							image_item.setString_forType(
 								&NSString::from_str(&data),
 								&NSString::from_str(NS_PASTEBOARD_TYPE_SVG),
 							);
-							write_objects.push(ProtocolObject::from_id(item));
+							has_image_item = true;
 						}
 					},
 					ClipboardData::FileUrl(urls) => {
@@ -728,6 +763,10 @@ impl<'clipboard> Set<'clipboard> {
 			// Add the main item first if it has data
 			if has_main_item_data {
 				write_objects.insert(0, ProtocolObject::from_id(main_item));
+			}
+			// Then the single image item, if any
+			if has_image_item {
+				write_objects.push(ProtocolObject::from_id(image_item));
 			}
 
 			if write_objects.is_empty() {
