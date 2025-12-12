@@ -652,6 +652,12 @@ impl<'clipboard> Set<'clipboard> {
 			let mut write_objects: Vec<Id<ProtocolObject<(dyn NSPasteboardWriting + 'static)>>> =
 				vec![];
 
+			// ====================== S2: Dedupe at source: if any PNG image is present, skip RGBA items
+			let has_png_image = data.iter().any(|d| matches!(d, ClipboardData::Image(ImageData::Png(_))));
+			if has_png_image {
+				log::debug!("====================== S2/macOS: PNG present; will skip RGBA items when writing");
+			}
+
 			for d in data {
 				match d {
 					// Text-based formats go into the main_item as different representations
@@ -672,6 +678,10 @@ impl<'clipboard> Set<'clipboard> {
 					// Image and FileUrl use separate items as they require different object types
 					ClipboardData::Image(data) => match data {
 						ImageData::Rgba(data) => {
+							if has_png_image {
+								log::debug!("====================== S2/macOS: Skip RGBA because PNG is present in payload");
+								continue;
+							}
 							let pixels = data.bytes.clone().into();
 							let image = image_from_pixels(pixels, data.width, data.height)
 								.map_err(|e| into_unknown("failed to get rgba from pixels", e))?;
